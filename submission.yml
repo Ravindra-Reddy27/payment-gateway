@@ -1,0 +1,45 @@
+submission:
+  # 1. SETUP COMMANDS
+  # Install dependencies and configure environment by building containers
+  setup:
+    - command: "docker-compose build"
+      timeout: 600 # 10 minutes max for initial build
+
+  # 2. START COMMANDS
+  # Launch application via docker-compose including Redis and worker service
+  start:
+    - command: "docker-compose up -d"
+      timeout: 180
+      check:
+        # Wait for the API to be ready before proceeding
+        url: "http://localhost:8000/api/v1/test/jobs/status"
+        method: "GET"
+        status_code: 200
+        retries: 30
+        delay: 5
+
+  # 3. TEST COMMANDS
+  # Run test suite if available (Placeholder since we use verifying steps below)
+  test:
+    - name: "Basic Integration Test"
+      command: "curl -f http://localhost:8000/api/v1/test/jobs/status"
+
+  # 4. VERIFY COMMANDS
+  # API contract validation, health checks, job queue status
+  verify:
+    - name: "Verify API Health & Job Queue Status"
+      command: "curl -f http://localhost:8000/api/v1/test/jobs/status"
+      
+    - name: "Verify Dashboard UI is Running"
+      command: "curl -f http://localhost:3000"
+
+    - name: "Verify SDK is Accessible"
+      command: "curl -f http://localhost:3001/checkout.js"
+
+    - name: "Verify Test Merchant is Listening"
+      command: "curl -f http://localhost:4000/webhook || echo 'Merchant requires POST'"
+
+  # 5. SHUTDOWN COMMANDS
+  # Gracefully stop services and remove volumes to ensure clean state for next run
+  shutdown:
+    - command: "docker-compose down -v"

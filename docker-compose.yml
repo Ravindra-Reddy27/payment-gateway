@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # 1. Database
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: gateway_user
+      POSTGRES_PASSWORD: gateway_pass
+      POSTGRES_DB: payment_gateway
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway_user -d payment_gateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis (Queue)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # 3. Backend API
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://gateway_user:gateway_pass@postgres:5432/payment_gateway
+      REDIS_URL: redis://redis:6379
+      WEBHOOK_RETRY_INTERVALS_TEST: "true" # For grading
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. Worker Service
+  worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://gateway_user:gateway_pass@postgres:5432/payment_gateway
+      REDIS_URL: redis://redis:6379
+      WEBHOOK_RETRY_INTERVALS_TEST: "true"
+    # ADD THESE TWO LINES:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 5. Frontend Dashboard (Port 3000)
+  dashboard:
+    build: ./frontend
+    ports:
+      - "3000:80" # Maps Nginx port 80 to host port 3000
+    depends_on:
+      - api
+
+  # 6. SDK / Checkout (Port 3001)
+  checkout:
+    build: ./checkout-widget
+    ports:
+      - "3001:3001"
+      
+  # 7. Test Merchant (Receiver)  
+  test-merchant:
+    build: ./test-merchant
+    ports:
+      - "4000:4000"
+    networks:
+      - default
+
+volumes:
+  postgres_data:

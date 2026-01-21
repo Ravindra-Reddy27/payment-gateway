@@ -1,0 +1,20 @@
+# --- Dependencies (Never commit these) ---
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# --- Build Outputs (Docker builds these for you) ---
+dist/
+.output/
+
+# --- Environment Variables (Security risk) ---
+.env
+
+# --- OS Junk Files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+npm-debug.log
